@@ -1,5 +1,5 @@
 # 6414_project
-A regression analysis on factors that impact the divident payout ratio of US listed firms. Modified from the ISYE6414 group project
+This is regression analysis on factors that impact the divident payout ratio of US listed firms, modified from the ISYE6414 group project
 
 ### Abstract
 In the project, we tried to find factors that might affect the dividend payout ratio of US listed firms.
@@ -26,7 +26,22 @@ The data points are time-dependent. Variables, such as sales growth and dividend
 
 </div>
 
+The scatter plot matrix displays various financial metrics like Profitability, Cash Ratio, Sales Growth, Debt to Equity Ratio, and Dividend Payout Ratio. These are plotted against 'INDUSTRY' and other variables. There are some unusual observations with outliers that might affect the clarity of the relationships between the response variable and the independent variables.
 
+<p align="center">
+  <img src="https://github.com/lazayxc/6414_project/assets/95152168/0f018d78-1e5b-4f4c-913f-73c8b28c5497" alt="Alternative Text for Image"/>
+  <br>
+  <strong>Matrix Plot of Variables</strong>
+</p>
+
+<p align="center">
+  <img src="https://github.com/lazayxc/6414_project/assets/95152168/080aad75-25de-41c2-beb3-a74913618f19" alt="Modified Data Frame" width="100%" height="auto"/>
+  <br>
+  <strong>Modified Data Frame</strong>
+</p>
+
+
+There are 2,399 observations in our sample. We will split this data into training and testing sets to check the predictive performance of our models. This is a common practice in statistics, where we train the model with one part of the data and test its prediction ability with another, unseen part.
 
 
 
