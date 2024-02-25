@@ -1,0 +1,515 @@
+---
+title: "ISyE 6414 Project 2"
+author: "Xiaochen Yan"
+date: "2023-11-23"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("/Users/lazayxc/Desktop/GT/Fall 23/ISYE 6414 Regression/6414 project/analysis files/2. model")
+
+```
+
+We eliminated the non-positive values of the response variables (Dividend Payout Ratio)
+```{r,warning=FALSE,message=FALSE}
+data1<-read.csv("pos_data.csv",sep=',',header=TRUE)[-1]
+dim(data1)
+
+```
+
+----------Part 3: Data Description------------
+
+3.1 Descriptive statistics
+
+The maximum values of the five variables show that there are some unusual observations. 
+
+```{r}
+summary(data1)
+```
+3.2 Scatter Plot
+
+The scatter plot also shows unusual observations. Besides, due to unusual values, the relationship between response variable and independent variables is not clear.
+
+```{r}
+plot(data1[,-ncol(data1)-1])
+```
+3.3 Process Unusual Observations
+
+```{r,warning=FALSE,message=FALSE}
+
+# Replace values greater than the 99% quantile with the 99% quantile value, excluding "Industry"
+data_99 <- data1  # Copy the original data frame
+
+quantile_99 <- apply(data_99, 2, function(x) quantile(x, probs = 0.99))
+data_99["Profitability"] <- apply(data_99["Profitability"], 2, function(x, q) ifelse(x > q, q, x), quantile_99)
+data_99["Cash.Ratio"] <- apply(data_99["Cash.Ratio"], 2, function(x, q) ifelse(x > q, q, x), quantile_99)
+data_99["Sales.Growth"] <- apply(data_99["Sales.Growth"], 2, function(x, q) ifelse(x > q, q, x), quantile_99)
+data_99["Debt.to.Equity.Ratio"] <- apply(data_99["Debt.to.Equity.Ratio"], 2, function(x, q) ifelse(x > q, q, x), quantile_99)
+data_99["Dividend.Payout.Ratio"] <- apply(data_99["Dividend.Payout.Ratio"], 2, function(x, q) ifelse(x > q, q, x), quantile_99)
+
+# Print the modified data frame
+summary(data_99)
+```
+3.4 Data Histogram 
+
+```{r}
+hist(data_99$Dividend.Payout.Ratio,main="",xlab="Count of Dividend Payout Ratio", border="gold",col="darkblue")
+hist(data_99$Profitability,main="",xlab="Count of Profitability", border="gold",col="darkblue")
+hist(data_99$Cash.Ratio,main="",xlab="Count of Profitability", border="gold",col="darkblue")
+hist(data_99$Sales.Growth,main="",xlab="Count of Profitability", border="gold",col="darkblue")
+hist(data_99$Debt.to.Equity.Ratio,main="",xlab="Count of Profitability", border="gold",col="darkblue")
+```
+----------Part 4: Analysis----------------
+
+4.1 Split data set and correlation analysis
+
+```{r,message=FALSE,warning=FALSE}
+set.seed(1234)
+
+sample_size = floor(0.8*nrow(data_99))
+picked = sample(seq_len(nrow(data_99)),size = sample_size)
+
+data = data_99[picked,]
+y <- data$Dividend.Payout.Ratio
+
+attach(data)
+
+```
+
+
+```{r}
+summary(y)
+print(length(y))
+```
+Since the response value is a ratio, we choose the majority of data (less than 2) for histogram. 
+
+```{r}
+adj_y = y[y<2]
+length(adj_y)
+hist(adj_y,main="",xlab="Count of Dividend Payout Ratio",breaks = 10,xlim = c(0, 2), border="gold",col="darkblue")
+```
+```{r}
+corr = cor(data)
+print(corr)
+```
+
+
+
+4.2 Box-Cox Transformation
+
+Apply the box-cox and the result shows that we need to apply natural logarithm transformation to the response variable
+```{r}
+library(MASS)
+result <- boxcox(y ~ 1, data = data)
+result
+```
+4.3 First-order model
+4.3.1 Regression
+
+F-statistic shows the model as a whole is significant. The coefficient of Sales.Growth and Debt.to.Equity.Ratio is significant.
+
+### First -order model
+
+```{r}
+
+model1 = lm(log(y)~Profitability+Cash.Ratio+Sales.Growth+Debt.to.Equity.Ratio+factor(INDUSTRY),data = data)
+summary(model1)
+
+```
+
+test for subset of coefficient
+```{r}
+reduced_model1 = lm(log(y) ~ Cash.Ratio + Sales.Growth,data=data)
+anova(reduced_model1, model1)
+
+```
+
+4.3.2 Model Diagnostics
+Analysis of residuals:
+
+```{r,message=FALSE,warning=FALSE}
+res = stdres(model1)
+
+
+par(mfrow = c(2,2))
+plot(model1$fitted.values, res, xlab = "Fitted Values", ylab = "Residuals",pch = 19)
+abline(h = 0)
+
+# plot(Profitability, res, xlab = "Profitability", ylab = "Residuals",xlim=c(0,1), pch = 19)
+# abline(h = 0)
+# plot(Cash.Ratio, res, xlab = "Cash.Ratio", ylab = "Residuals",xlim=c(0,5), pch = 19)
+# abline(h = 0)
+# plot(Sales.Growth, res, xlab = "Sales.Growth", ylab = "Residuals",xlim=c(0,3), pch = 19)
+# abline(h = 0)
+# plot(Debt.to.Equity.Ratio, res, xlab = "Debt.to.Equity.Ratio", ylab = "Residuals",xlim=c(0,50), pch = 19)
+# abline(h = 0)
+# plot(INDUSTRY, res, xlab = "INDUSTRY", ylab = "Residuals", pch = 19)
+# abline(h = 0)
+
+
+hist(res, xlab="Residuals", main= "Histogram of Residuals")
+
+qqnorm(res,ylim=c(-5,5))
+qqline(res)
+
+cook = cooks.distance(model1)
+plot(cook,type="h",lwd=3, ylab = "Cook’s Distance")
+
+```
+Use Cook's distance to check if there are any outliers.
+```{r}
+cook = cooks.distance(model1)
+plot(cook,type="h",lwd=3, ylab = "Cook’s Distance")
+hurdle = 4/length(data)
+
+indices <- which(cook > hurdle)
+if(length(indices) > 0) {
+    print(cook[indices])
+} else {
+    print("No Outliers")
+}
+
+```
+Multicollinearity:
+
+```{r,warning=FALSE,message=FALSE}
+library(car)
+
+vif(model1)
+max(10,1/(1-summary(model1)$r.squared))
+```
+
+Apply transformation to the predict variables. Only Debt.to.Equity.Ratio is positive so we will use log transformation to it.
+```{r}
+model1_trans = lm(log(y)~Profitability+sqrt(Cash.Ratio)+Sales.Growth+log(Debt.to.Equity.Ratio)+factor(INDUSTRY),data = data)
+summary(model1_trans)
+```
+
+
+
+
+```{r,warning=FALSE,message=FALSE}
+
+res = stdres(model1_trans)
+cook = cooks.distance(model1_trans)
+
+par(mfrow = c(3,3))
+plot(model1_trans$fitted.values, res, xlab = "Dividend.Payout.Ratio", ylab = "Residuals",pch = 19)
+abline(h = 0)
+plot(Profitability, res, xlab = "Profitability", ylab = "Residuals",xlim=c(0,1), pch = 19)
+abline(h = 0)
+plot(sqrt(Cash.Ratio), res, xlab = "square root of Cash.Ratio", ylab = "Residuals",xlim=c(0,5), pch = 19)
+abline(h = 0)
+plot(Sales.Growth, res, xlab = "Sales.Growth", ylab = "Residuals",xlim=c(0,3), pch = 19)
+abline(h = 0)
+plot(log(Debt.to.Equity.Ratio), res, xlab = "log of Debt.to.Equity.Ratio", ylab = "Residuals",xlim=c(0,5), pch = 19)
+abline(h = 0)
+plot(INDUSTRY, res, xlab = "INDUSTRY", ylab = "Residuals", pch = 19)
+abline(h = 0)
+
+
+hist(res, xlab="Residuals", main= "Histogram of Residuals")
+
+qqnorm(res,ylim=c(-5,5))
+qqline(res)
+
+plot(cook,type="h",lwd=3, ylab = "Cook’s Distance")
+
+
+```
+
+
+```{r}
+
+vif(model1_trans)
+max(10,1/(1-summary(model1_trans)$r.squared))
+
+```
+
+## Poisson
+```{r}
+model3 = glm(round(y*100) ~ Profitability+Cash.Ratio+Sales.Growth+Debt.to.Equity.Ratio+factor(INDUSTRY),data=data, family="poisson" )
+
+summary(model3)
+```
+Test for overall regression
+
+```{r}
+1-pchisq((213187- 144853), 1918-1892)
+```
+Goodness of Fit Test - Deviance Test
+
+```{r}
+with(model3, cbind(res.deviance = deviance, df = df.residual,
+                           p = 1- pchisq(deviance, df.residual)))
+```
+p-value = 0. Reject the null hypothesis of good fit. 
+
+Residual Analysis
+
+```{r}
+res <- resid(model3,type="deviance")
+
+par(mfrow = c(3,3))
+plot(model3$fitted.values, res, xlab = "Dividend.Payout.Ratio", ylab = "Residuals", pch = 19)
+abline(h = 0)
+plot(Profitability, res, xlab = "Profitability", ylab = "Residuals",xlim=c(0,1), pch = 19)
+abline(h = 0)
+plot(Cash.Ratio, res, xlab = "pk.Ratio", ylab = "Residuals",xlim=c(0,5), pch = 19)
+abline(h = 0)
+plot(Sales.Growth, res, xlab = "Sales.Growth", ylab = "Residuals",xlim=c(0,3), pch = 19)
+abline(h = 0)
+plot(Debt.to.Equity.Ratio, res, xlab = "Debt.to.Equity.Ratio", ylab = "Residuals",xlim=c(0,50), pch = 19)
+abline(h = 0)
+plot(INDUSTRY, res, xlab = "INDUSTRY", ylab = "Residuals", pch = 19)
+abline(h = 0)
+
+
+hist(res, xlab="Residuals", main= "Histogram of Residuals")
+
+qqnorm(res)
+qqline(res)
+
+plot(cook,type="h",lwd=3, ylab = "Cook’s Distance")
+
+```
+
+```{r}
+## Do we have overdispersion?
+wdf <- model3$df.residual # n-p-1
+dev <- model3$deviance
+overdisp <- dev/wdf
+print(overdisp)
+```
+```{r}
+## Assuming GOF: Deviance ~ N(0,1)
+##  Evaluate Deviance residuals vs the Normal quantile with prob=0.99995
+dev_residuals <- residuals(model3, type = "deviance")
+outliers <- which(abs(dev_residuals) > qnorm(.99995))
+length(outliers)
+```
+959 outliers, indicating overdispersion.
+
+
+Apply an overdispersed Poisson Regression
+```{r}
+quasipoisson_model <- glm(round(y*100) ~ Profitability+Cash.Ratio+Sales.Growth+Debt.to.Equity.Ratio+factor(INDUSTRY), data=data, family="quasipoisson")
+summary(quasipoisson_model)
+
+```
+
+
+
+
+
+### Second -order model
+
+```{r}
+model2.1 = lm(log(y)~(Profitability+sqrt(Cash.Ratio)+Sales.Growth+log(Debt.to.Equity.Ratio))**2+factor(INDUSTRY)+I(Profitability^2)+I(sqrt(Cash.Ratio)^2)+I(Sales.Growth^2)+I(log(Debt.to.Equity.Ratio^2)),data=data)
+summary(model2.1)
+
+```
+
+```{r}
+model2.2 = lm(log(y)~(Profitability+Cash.Ratio+Sales.Growth+log(Debt.to.Equity.Ratio))**2+factor(INDUSTRY)+I(Profitability^2)+I(Cash.Ratio^2)+I(Sales.Growth^2)+I(log(Debt.to.Equity.Ratio^2)),data=data)
+summary(model2.2)
+
+```
+
+```{r,message=FALSE,warning=FALSE}
+res = stdres(model2.1)
+cook = cooks.distance(model2.1)
+
+par(mfrow = c(3,3))
+plot(model2.1$fitted.values, res, xlab = "Dividend.Payout.Ratio", ylab = "Residuals", pch = 19)
+abline(h = 0)
+plot(Profitability, res, xlab = "Profitability", ylab = "Residuals",xlim=c(0,1), pch = 19)
+abline(h = 0)
+plot(Cash.Ratio, res, xlab = "pk.Ratio", ylab = "Residuals",xlim=c(0,5), pch = 19)
+abline(h = 0)
+plot(Sales.Growth, res, xlab = "Sales.Growth", ylab = "Residuals",xlim=c(0,3), pch = 19)
+abline(h = 0)
+plot(Debt.to.Equity.Ratio, res, xlab = "Debt.to.Equity.Ratio", ylab = "Residuals",xlim=c(0,50), pch = 19)
+abline(h = 0)
+plot(INDUSTRY, res, xlab = "INDUSTRY", ylab = "Residuals", pch = 19)
+abline(h = 0)
+
+
+hist(res, xlab="Residuals", main= "Histogram of Residuals")
+
+qqnorm(res,ylim=c(-5,5))
+qqline(res)
+
+plot(cook,type="h",lwd=3, ylab = "Cook’s Distance")
+
+
+```
+
+```{r}
+model2 = lm(log(y)~(Profitability+sqrt(Cash.Ratio)+Sales.Growth+log(Debt.to.Equity.Ratio))**2+factor(INDUSTRY),data=data)
+summary(model2)
+
+```
+
+
+```{r}
+model2_adj = lm(log(y)~Profitability+sqrt(Cash.Ratio)+Sales.Growth+log(Debt.to.Equity.Ratio)+factor(INDUSTRY)+Profitability*sqrt(Cash.Ratio)+Profitability*Sales.Growth+Profitability*log(Debt.to.Equity.Ratio)+sqrt(Cash.Ratio)*log(Debt.to.Equity.Ratio) ,data = data)
+summary(model2_adj)
+anova(model2_adj, model2)
+
+```
+We fail to reject Null hypothesis! so we can choose the model with subset of coefficients
+
+
+```{r,message=FALSE,warning=FALSE}
+res = stdres(model2_adj)
+cook = cooks.distance(model2_adj)
+
+par(mfrow = c(3,3))
+plot(model2_adj$fitted.values, res, xlab = "Dividend.Payout.Ratio", ylab = "Residuals", pch = 19)
+abline(h = 0)
+plot(Profitability, res, xlab = "Profitability", ylab = "Residuals",xlim=c(0,1), pch = 19)
+abline(h = 0)
+plot(Cash.Ratio, res, xlab = "pk.Ratio", ylab = "Residuals",xlim=c(0,5), pch = 19)
+abline(h = 0)
+plot(Sales.Growth, res, xlab = "Sales.Growth", ylab = "Residuals",xlim=c(0,3), pch = 19)
+abline(h = 0)
+plot(Debt.to.Equity.Ratio, res, xlab = "Debt.to.Equity.Ratio", ylab = "Residuals",xlim=c(0,50), pch = 19)
+abline(h = 0)
+plot(INDUSTRY, res, xlab = "INDUSTRY", ylab = "Residuals", pch = 19)
+abline(h = 0)
+
+
+hist(res, xlab="Residuals", main= "Histogram of Residuals")
+
+qqnorm(res,ylim=c(-5,5))
+qqline(res)
+
+plot(cook,type="h",lwd=3, ylab = "Cook’s Distance")
+
+
+```
+```{r}
+outliers = which(cook>1)
+length(outliers)
+data_without_outliers <- data[-outliers, ]
+y_without_outliers <- y[-outliers, ]
+```
+
+
+```{r}
+model2_no_outlier = lm(log(y_without_outliers)~Profitability+Cash.Ratio+Sales.Growth+log(Debt.to.Equity.Ratio)+factor(INDUSTRY)+Profitability*Cash.Ratio+Profitability*Sales.Growth+Profitability*log(Debt.to.Equity.Ratio)+Cash.Ratio*log(Debt.to.Equity.Ratio) ,data = data_without_outliers)
+summary(model2_no_outlier)
+
+```
+
+```{r,message=FALSE,warning=FALSE}
+res = stdres(model2_no_outlier)
+cook = cooks.distance(model2_no_outlier)
+
+par(mfrow = c(3,3))
+plot(model2_no_outlier$fitted.values, res, xlab = "Dividend.Payout.Ratio", ylab = "Residuals", pch = 19)
+abline(h = 0)
+plot(Profitability[-outliers, ], res, xlab = "Profitability", ylab = "Residuals",xlim=c(0,1), pch = 19)
+abline(h = 0)
+plot(Cash.Ratio[-outliers, ], res, xlab = "pk.Ratio", ylab = "Residuals",xlim=c(0,5), pch = 19)
+abline(h = 0)
+plot(Sales.Growth[-outliers, ], res, xlab = "Sales.Growth", ylab = "Residuals",xlim=c(0,3), pch = 19)
+abline(h = 0)
+plot(Debt.to.Equity.Ratio[-outliers, ], res, xlab = "Debt.to.Equity.Ratio", ylab = "Residuals",xlim=c(0,50), pch = 19)
+abline(h = 0)
+plot(INDUSTRY[-outliers], res, xlab = "INDUSTRY", ylab = "Residuals", pch = 19)
+abline(h = 0)
+
+
+hist(res, xlab="Residuals", main= "Histogram of Residuals")
+
+qqnorm(res,ylim=c(-5,5))
+qqline(res)
+
+plot(cook,type="h",lwd=3, ylab = "Cook’s Distance")
+
+
+```
+
+4.5 Model Selection
+
+### Model selection
+```{r}
+detach(data)
+
+test=data_99[-picked,]
+
+```
+
+
+```{r}
+pred1 <- predict(model1_trans, test, interval = 'prediction')
+test.pred1 <- pred1[,1]
+test.lwr1 <- pred1[,2]
+test.upr1 <- pred1[,3]
+# Mean Squared Prediction Error (MSPE)
+mean((test.pred1-test$Dividend.Payout.Ratio)^2)
+
+# Mean Absolute Prediction Error (MAE)
+mean(abs(test.pred1-test$Dividend.Payout.Ratio))
+
+# Mean Absolute Percentage Error (MAPE)
+mean(abs(test.pred1-test$Dividend.Payout.Ratio)/test$Dividend.Payout.Ratio)
+
+# Precision Measure (PM)
+sum((test.pred1-test$Dividend.Payout.Ratio)^2)/sum((test$Dividend.Payout.Ratio-mean(test$Dividend.Payout.Ratio))^2)
+
+# CI Measure (CIM)
+(sum(test$Dividend.Payout.Ratio<test.lwr1)+sum(test$Dividend.Payout.Ratio>test.upr1))/nrow(test)
+
+
+```
+
+
+```{r}
+
+pred1 <- predict(model2_adj, test, interval = 'prediction')
+test.pred1 <- pred1[,1]
+test.lwr1 <- pred1[,2]
+test.upr1 <- pred1[,3]
+# Mean Squared Prediction Error (MSPE)
+mean((test.pred1-test$Dividend.Payout.Ratio)^2)
+
+# Mean Absolute Prediction Error (MAE)
+mean(abs(test.pred1-test$Dividend.Payout.Ratio))
+
+# Mean Absolute Percentage Error (MAPE)
+mean(abs(test.pred1-test$Dividend.Payout.Ratio)/test$Dividend.Payout.Ratio)
+
+# Precision Measure (PM)
+sum((test.pred1-test$Dividend.Payout.Ratio)^2)/sum((test$Dividend.Payout.Ratio-mean(test$Dividend.Payout.Ratio))^2)
+
+# CI Measure (CIM)
+(sum(test$Dividend.Payout.Ratio<test.lwr1)+sum(test$Dividend.Payout.Ratio>test.upr1))/nrow(test)
+
+```
+
+```{r}
+
+pred1 <- predict(model2_no_outlier, test, interval = 'prediction')
+test.pred1 <- pred1[,1]
+test.lwr1 <- pred1[,2]
+test.upr1 <- pred1[,3]
+# Mean Squared Prediction Error (MSPE)
+mean((test.pred1-test$Dividend.Payout.Ratio)^2)
+
+# Mean Absolute Prediction Error (MAE)
+mean(abs(test.pred1-test$Dividend.Payout.Ratio))
+
+# Mean Absolute Percentage Error (MAPE)
+mean(abs(test.pred1-test$Dividend.Payout.Ratio)/test$Dividend.Payout.Ratio)
+
+# Precision Measure (PM)
+sum((test.pred1-test$Dividend.Payout.Ratio)^2)/sum((test$Dividend.Payout.Ratio-mean(test$Dividend.Payout.Ratio))^2)
+
+# CI Measure (CIM)
+(sum(test$Dividend.Payout.Ratio<test.lwr1)+sum(test$Dividend.Payout.Ratio>test.upr1))/nrow(test)
+
+```
